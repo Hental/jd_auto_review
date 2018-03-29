@@ -1,0 +1,9 @@
+{
+  "name": "jd_auto_review",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "tao.liu <lt315417284@gmail.com>",
+  "license": "MIT",
+  "private": false,
+  "description": "京东自动好评，Greasy 脚本"
+}
