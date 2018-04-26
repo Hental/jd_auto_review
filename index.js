@@ -11,7 +11,6 @@
 // @namespace         https://greasyfork.org/users/177053
 // ==/UserScript==
 
-/* eslint-disable */
 (function() {
   'use strict';
 
@@ -42,6 +41,7 @@
     '//img30.360buyimg.com/n1/s760x500_jfs/t18994/89/798457060/284655/24dd84f1/5aa77650N42158426.jpg'
   ];
 
+  let isReview = false;
   const INTELTVAL = 8000;
 
   function isElement(el) {
@@ -76,30 +76,37 @@
     el.dispatchEvent(createClickEvent());
   }
 
-  async function checkReviewSuccess(params) {
-    let dialog = document.querySelector('.ui-dialog');
+  function checkReviewSuccess(params) {
+    const findDialog = () => new Promise(res => {
+      const r = () => {
+        let dialog = document.querySelector('.ui-dialog');
+        if (dialog) {
+          res(dialog);
+        } else {
+          sleep(100).then(r);
+        }
+      }
+    });
 
-    while (!dialog) {
-      await sleep(100);
-      dialog = document.querySelector('.ui-dialog');
-    }
+    return findDialog()
+      .then(dialog => {
+        const closeButton = dialog.querySelector('a[title="关闭"]');
+        const text = $(dialog).find('.ui-dialog-content .item-fore h3').text();
+        const success = text.indexOf('成功') > -1;
 
-    const closeButton = dialog.querySelector('a[title="关闭"]');
-    const text = $(dialog).find('.ui-dialog-content .item-fore h3').text();
-    const success = text.includes('成功');
-
-    closeButton.dispatchEvent(createClickEvent());
-    return success;
+        closeButton.dispatchEvent(createClickEvent());
+        return success;
+      });
   }
 
-  async function review(elm) {
+  function review(elm) {
     if (!(elm instanceof HTMLElement)) {
       return;
     }
 
     const content = random(contentArr);
     const imageUrl = random(imageArr);
-    const showImage = Math.random() > 0.5;
+    const shouldShowImage = true;
 
     const $elm = $(elm);
     const elmShowBoxButton = $elm.find('a:contains("点击评价")');
@@ -109,35 +116,50 @@
     const elmSubmit = $elm.find('a:contains("发表评价")');
 
     const name = $elm.find('.p-name a').text();
-    const isCommentBoxHidden = !elmBox.attr('style') || elmBox.attr('style').includes('display: none');
 
-    // show comment box
-    if (isCommentBoxHidden) {
-      clickElement(elmShowBoxButton);
-      await randomSleep();
+    const showCommentBox = () => new Promise(res => {
+      const isCommentBoxHidden = !elmBox.attr('style') || elmBox.attr('style').includes('display: none');
+      if (isCommentBoxHidden) {
+        clickElement(elmShowBoxButton);
+        randomSleep().then(res);
+      }
+      res();
+    });
+
+    const showImage = () => new Promise(res => {
+      if (shouldShowImage) {
+        const uploadImageEl = document.querySelector('input[name="imgs1"]');
+        uploadImageEl.value = imageUrl;
+        randomSleep().then(res);
+      }
+      res();
+    });
+
+    const end = () => {
+      console.log('review', { name, content, imageUrl, shouldShowImage });
     }
 
-    clickElement(elmFiveStar);
-    clickElement(elmInput);
-    elmInput.focus().val(content);
-    await randomSleep();
-
-    if (showImage) {
-      const uploadImageEl = document.querySelector('input[name="imgs1"]');
-      uploadImageEl.value = imageUrl;
-      await randomSleep();
-    }
-
-    clickElement(elmSubmit);
-    console.log('review', { name, content, imageUrl, showImage });
-    await sleep(1000);
-    return checkReviewSuccess();
+    return Promise.resolve()
+      .then(showCommentBox)
+      .then(() => clickElement(elmFiveStar))
+      .then(() => clickElement(elmInput))
+      .then(() => elmInput.focus().val(content))
+      .then(randomSleep)
+      .then(shouldShowImage)
+      .then(() => clickElement(elmSubmit))
+      .then(end)
+      .then(randomSleep)
+      .then(checkReviewSuccess)
   }
 
   function main() {
+    if (isReview) return;
+
     let list = document.querySelectorAll('.comt-plists .comt-plist');
+    
     list = [].slice.call(list);
     window.$stopReview = false;
+    isReview = true;
 
     function r() {
       const it = list.shift();
@@ -150,6 +172,8 @@
 
       if (list.length > 0 && !window.$stopReview) {
         setTimeout(r, INTELTVAL);
+      } else {
+        isReview = false;
       }
     };
 
@@ -165,8 +189,6 @@
     button.style.padding = '3px 10px';
     button.style.boxShadow = '2px 2px 5px 1px rgb(236, 236, 236)';
     button.style.color = 'rgb(50, 50, 50)';
-    // button.style.backgroundColor = 'none';
-    // button.style.borderRadius = '5px';
 
     button.appendChild(textNode);
     return button;
