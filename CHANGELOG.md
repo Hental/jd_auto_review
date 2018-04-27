@@ -1,5 +1,9 @@
 # change log
 
+## 1.1.1
+
+support window.$debug to debug
+
 ## 1.1.0
 
 use Promise 替代 async

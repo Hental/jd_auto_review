@@ -5,7 +5,7 @@
 // @match             http://club.jd.com/myJdcomments/myJdcomments.action?sort=0
 // @match             https://club.jd.com/myJdcomments/myJdcomments.action?sort=0
 // @include           *://club.jd.com/myJdcomments/myJdcomments.action?sort=0
-// @version           1.0.0
+// @version           1.1.1
 // @eversion          6
 // @connect-src       www.jd.com
 // @namespace         https://greasyfork.org/users/177053
@@ -41,25 +41,33 @@
     '//img30.360buyimg.com/n1/s760x500_jfs/t18994/89/798457060/284655/24dd84f1/5aa77650N42158426.jpg'
   ];
 
-  let isReview = false;
-  const INTELTVAL = 8000;
+  let isReviewing = false;
+  const INTELVAL = 8000;
 
   function isElement(el) {
     return el instanceof HTMLElement || (el instanceof jQuery && el.get(0) instanceof HTMLElement);
   }
 
-  function random(arr) {
-    const index = parseInt((arr.length - 1) * Math.random(), 10);
-    return arr[index];
+  function getDOM(elm) {
+    return elm instanceof jQuery ? elm.get(0) : elm;
+  }
+
+  function random(min, max) {
+    let val = Math.random();
+    val = (max - min) * val + min;
+    return parseInt(val.toString(), 10);
   }
 
   function sleep(time) {
     return new Promise((res) => setTimeout(res, time));
   }
 
+  function randomArrValue(arr) {
+    return arr[random(0, arr.length - 1)];
+  }
+
   function randomSleep() {
-    const time = 400 + parseInt((Math.random + 1) * 100, 10);
-    return new Promise((res) => setTimeout(res, time));
+    return sleep(random(300, 600));
   }
 
   function createClickEvent() {
@@ -72,8 +80,29 @@
     if (!isElement(elm)) {
       return;
     }
-    const el = elm instanceof jQuery ? elm.get(0) : elm;
-    el.dispatchEvent(createClickEvent());
+    getDOM(elm).dispatchEvent(createClickEvent());
+  }
+
+  function inspectPromiseFn(fn, check, intelval = 100, max = 5) {
+    return new Promise((res, rej) => {
+      let v;
+      let times = 0;
+      const r = () => {
+        if (check()) {
+          res(v)
+        } else {
+          times += 1;
+          if (times >= max) {
+            console.error('many try', fn, check);
+            rej('many try');
+          } else {
+            v = fn();
+            sleep(intelval).then(r);
+          }
+        }
+      }
+      r();
+    });
   }
 
   function checkReviewSuccess(params) {
@@ -104,8 +133,8 @@
       return;
     }
 
-    const content = random(contentArr);
-    const imageUrl = random(imageArr);
+    const content = randomArrValue(contentArr);
+    const imageUrl = randomArrValue(imageArr);
     const shouldShowImage = true;
 
     const $elm = $(elm);
@@ -150,31 +179,34 @@
       .then(end)
       .then(randomSleep)
       .then(checkReviewSuccess)
+      .catch(err => console.error('review error', elm, err))
   }
 
   function main() {
-    if (isReview) return;
+    if (isReviewing) return;
 
     let list = document.querySelectorAll('.comt-plists .comt-plist');
-    
     list = [].slice.call(list);
-    window.$stopReview = false;
-    isReview = true;
+    isReviewing = true;
+
+    if (window.$debug) {
+      debugger;
+    }
 
     function r() {
-      const it = list.shift();
+      const item = list.shift();
 
-      try {
-        const success = review(it);
-      } catch (error) {
-        console.error('review error:', error, it);
-      }
-
-      if (list.length > 0 && !window.$stopReview) {
-        setTimeout(r, INTELTVAL);
-      } else {
-        isReview = false;
-      }
+      review(item)
+        .then(() => {
+          if (list.length > 0 && !window.$stop) {
+            setTimeout(r, INTELVAL);
+          } else {
+            isReviewing = false;
+          }
+        })
+        .catch(err => {
+          console.error('review error:', item, err);
+        });
     };
 
     r();
@@ -201,5 +233,17 @@
 
     item.appendChild(button);
     wrapper.appendChild(item);
+
+    Object.defineProperty(window, '$stop', {
+      value: false,
+      enumerable: false,
+      configurable: false,
+    });
+
+    Object.defineProperty(window, '$debug', {
+      value: false,
+      enumerable: false,
+      configurable: false,
+    });
   }
 })();
